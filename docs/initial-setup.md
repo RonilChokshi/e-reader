@@ -96,20 +96,33 @@ uses a drive named `RPI-RP2`.
 
 ---
 
-## 5. Current Status
+## 5. Installing and Testing MicroPython
 
-At this point:
+### 5.1 Installing MicroPython
 
-- [x] GitHub repository created
-- [x] Git connected to GitHub
-- [x] VS Code configured for the project
-- [x] Raspberry Pi Pico 2 W connected to the PC
-- [x] BOOTSEL mode accessed
-- [x] `RP2350` drive detected
-- [ ] MicroPython installed
-- [ ] Pico tested with MicroPython
-- [ ] E-paper display connected
-- [ ] Buttons connected
-- [ ] microSD card connected
-- [ ] Wi-Fi functionality implemented
-- [ ] Battery added
+I downloaded the MicroPython firmware for the Raspberry Pi Pico 2 W
+and copied the `.uf2` file to the `RP2350` drive while the Pico was
+in BOOTSEL mode.
+
+After the firmware was copied, the `RP2350` drive disappeared and
+the Pico rebooted.
+
+### 5.2 Setting Up MicroPico
+
+I installed the MicroPico extension in VS Code.
+
+I then initialized the e-reader folder as a MicroPico project.
+
+MicroPico successfully detected and connected to the Raspberry Pi
+Pico 2 W.
+
+### 5.3 First MicroPython Test
+
+The VS Code terminal displayed the MicroPython REPL:
+
+`MicroPython v1.29.0 ... Raspberry Pi Pico 2 W with RP2350`
+
+I ran:
+
+```python
+print("Hello from my Pico 2 W!")
