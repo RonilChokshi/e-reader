@@ -126,3 +126,40 @@ I ran:
 
 ```python
 print("Hello from my Pico 2 W!")
+
+### 5.4 Running a Python File on the Pico
+
+I created `src/main.py` and wrote my first MicroPython program:
+
+```python
+from machine import Pin
+
+print("Hello from my e-reader!")
+```
+
+Initially, I accidentally used VS Code's normal Python Run button.
+This attempted to execute the file using Python 3.11 on my PC, which
+resulted in:
+
+```text
+ModuleNotFoundError: No module named 'machine'
+```
+
+I learned that `machine` is a MicroPython module available on the Pico,
+but not a standard Python module on my PC.
+
+I then used MicroPico to upload `main.py` to the Pico and used the
+MicroPico Run button in the bottom left to execute it.
+
+The Pico successfully printed:
+
+```text
+Hello from my e-reader!
+```
+
+This established the basic development workflow for the project:
+
+1. Write MicroPython code in VS Code.
+2. Upload the file to the Pico using MicroPico.
+3. Run the file on the Pico.
+4. View the output through the MicroPython REPL (Read-eval-print loop).
