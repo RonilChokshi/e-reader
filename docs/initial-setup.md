@@ -126,7 +126,7 @@ I ran:
 
 ```python
 print("Hello from my Pico 2 W!")
-
+```
 ### 5.4 Running a Python File on the Pico
 
 I created `src/main.py` and wrote my first MicroPython program:
