@@ -1,0 +1,115 @@
+# Initial Setup
+
+This document records the initial setup of my DIY e-reader project.
+
+The goal of this project is to build a custom e-reader using a
+Raspberry Pi Pico 2 W, an e-paper display, physical buttons,
+microSD storage, and eventually Wi-Fi and a battery.
+
+I am documenting the project in detail, including small setup
+steps, things I learn, mistakes, problems, and solutions.
+
+---
+
+## 1. Development Environment
+
+### 1.1 GitHub
+
+A GitHub repository was created for this project:
+
+`RonilChokshi/e-reader`
+
+GitHub will be used to store the project online and keep a history
+of the project's development.
+
+### 1.2 Visual Studio Code
+
+Visual Studio Code is being used as the main development
+environment for the project.
+
+### 1.3 Git
+
+Git is being used to track changes to the project.
+
+The local project folder is connected to the GitHub repository.
+
+---
+
+## 2. Raspberry Pi Pico 2 W
+
+The main microcontroller for the e-reader is a Raspberry Pi Pico 2 W.
+
+The Pico 2 W will eventually be connected to:
+
+- An e-paper display
+- Physical buttons
+- A microSD card
+- Wi-Fi
+- A battery
+
+The project is being developed incrementally, starting with getting
+the Pico working before connecting the other hardware.
+
+---
+
+## 3. Connecting the Pico to the PC
+
+I connected the Raspberry Pi Pico 2 W to my PC using the official
+Raspberry Pi USB cable.
+
+At this stage, the Pico was simply sitting on my desk and was not
+connected to the breadboard.
+
+---
+
+## 4. BOOTSEL Mode
+
+### 4.1 What is BOOTSEL?
+
+The Pico has a button labelled `BOOTSEL`.
+
+BOOTSEL is used to put the Pico into its USB bootloader mode.
+In this mode, the Pico can appear as a USB storage device, allowing
+firmware such as MicroPython to be installed.
+
+### 4.2 Entering BOOTSEL Mode
+
+To enter BOOTSEL mode:
+
+1. The Pico was disconnected from USB.
+2. The `BOOTSEL` button was pressed and held.
+3. While holding the button, the Pico was connected to the PC using
+   the USB cable.
+4. The button was then released.
+
+The Pico appeared on the PC as a removable drive named `RP2350`.
+
+### 4.3 Why is the drive called `RP2350`?
+
+The RP2350 is the microcontroller used by the Pico 2 W.
+
+The Pico 2/Pico 2 W uses `RP2350` as the name of its USB mass-storage
+bootloader drive.
+
+This was initially confusing because the original Raspberry Pi Pico
+uses a drive named `RPI-RP2`.
+
+---
+
+## 5. Current Status
+
+At this point:
+
+- [x] GitHub repository created
+- [x] Git connected to GitHub
+- [x] VS Code configured for the project
+- [x] Raspberry Pi Pico 2 W connected to the PC
+- [x] BOOTSEL mode accessed
+- [x] `RP2350` drive detected
+- [ ] MicroPython installed
+- [ ] Pico tested with MicroPython
+- [ ] E-paper display connected
+- [ ] Buttons connected
+- [ ] microSD card connected
+- [ ] Wi-Fi functionality implemented
+- [ ] Battery added
