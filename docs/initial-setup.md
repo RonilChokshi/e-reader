@@ -287,7 +287,43 @@ This gives us a stable default state:
                               LOW
 ```
 
-The resistor also limits the current when the button is pressed. Without a resistor, directly connecting the 3.3 V supply to GND would create an unwanted short circuit.
+### Key Electronics Concepts Learned
+
+A pull-up resistor does two important things:
+
+1. It gives GP10 a defined default HIGH state when the button is open.
+2. It limits the current when the button is pressed.
+
+The resistor does not "create" voltage or make charge move. The Pico's 3.3 V supply provides the potential difference, while the resistor limits the current according to Ohm's law:
+
+```text
+I = V / R
+```
+
+When the button is released, GP10 is connected to 3.3 V through the pull-up resistor:
+
+```text
+GP10 ≈ 3.3 V → HIGH → 1
+```
+
+When the button is pressed, GP10 is connected directly to GND:
+
+```text
+GP10 ≈ 0 V → LOW → 0
+```
+
+The voltage drop occurs across the resistor when current flows. The button itself has very low resistance, so there is approximately no voltage drop across the closed button.
+
+Without the pull-up resistor, the GPIO would be left floating when the button was released, meaning the Pico could not reliably determine whether the input was HIGH or LOW.
+
+If the resistor were completely absent, pressing the button would create a very-low-resistance path directly between 3.3 V and GND, resulting in a short circuit and potentially excessive current.
+
+The important distinction is:
+
+- **Voltage** is the potential difference between two points.
+- **Current** is the flow of electric charge.
+- **Resistance** opposes and limits current.
+- A potential difference across a resistance causes current to flow according to Ohm's law.
 
 ### Reading the GPIO
 
@@ -364,3 +400,308 @@ Button pressed!
 ```
 
 This was my first successful test of a physical input controlling a MicroPython program on the Pico.
+
+## 5.6 Button State and Press Detection
+
+After successfully using the button to control the built-in LED, I wanted to make the LED toggle state each time the button was pressed.
+
+The first version I wrote myself was:
+
+```python
+from machine import Pin
+import time
+
+button = Pin(10, Pin.IN, Pin.PULL_UP)
+
+led = Pin("LED", Pin.OUT)
+
+while True:
+
+    button_check = button.value()
+
+    led_check = led.value()
+
+    if button_check == 0:
+
+        if led_check == 0:
+
+            led.on()
+
+        if led_check == 1:
+
+            led.off()
+```
+
+### What My Code Does
+
+My code reads both the button state and the current LED state:
+
+```python
+button_check = button.value()
+led_check = led.value()
+```
+
+The button state tells the program whether the button is currently pressed:
+
+```text
+1 → released
+0 → pressed
+```
+
+The LED state tells the program whether the LED is currently on or off:
+
+```text
+1 → ON
+0 → OFF
+```
+
+The program then checks whether the button is pressed.
+
+If it is pressed and the LED is currently off, the LED is turned on:
+
+```python
+if button_check == 0:
+    if led_check == 0:
+        led.on()
+```
+
+If the button is pressed and the LED is currently on, the LED is turned off:
+
+```python
+if led_check == 1:
+    led.off()
+```
+
+This creates a toggle:
+
+```text
+OFF → ON
+ON  → OFF
+```
+
+### An Unexpected Problem
+
+Although this code worked, the LED sometimes appeared to flicker or did not toggle reliably.
+
+The reason is that the `while True` loop runs extremely quickly.
+
+The program was effectively doing this while the button was held down:
+
+```text
+Button pressed
+     ↓
+Toggle LED
+     ↓
+Button still pressed
+     ↓
+Toggle LED again
+     ↓
+Button still pressed
+     ↓
+Toggle LED again
+     ↓
+...
+```
+
+Therefore, the LED could be toggled many times while the button was held down.
+
+The program was responding to the **button's state** rather than to a single **button press event**.
+
+### Detecting a Button Press
+
+To solve this, I used the previous button state as well as the current button state.
+
+The improved version was:
+
+```python
+from machine import Pin
+import time
+
+button = Pin(10, Pin.IN, Pin.PULL_UP)
+led = Pin("LED", Pin.OUT)
+
+last_button_state = 1
+
+while True:
+
+    current_button_state = button.value()
+
+    if last_button_state == 1 and current_button_state == 0:
+
+        led.value(not led.value())
+        print("Button pressed!")
+
+    last_button_state = current_button_state
+
+    time.sleep(0.02)
+```
+
+### Comparing the Two Versions
+
+The main difference is **what the program is looking for**.
+
+My original code asks:
+
+> "Is the button currently pressed?"
+
+The improved code asks:
+
+> "Has the button just changed from released to pressed?"
+
+The important transition is:
+
+```text
+Previous state    Current state
+      1      →          0
+   released           pressed
+                   ↓
+              NEW PRESS
+```
+
+Once this transition is detected, the LED is toggled once.
+
+If the button remains held:
+
+```text
+1 → 0    → toggle
+0 → 0    → nothing
+0 → 0    → nothing
+0 → 0    → nothing
+```
+
+When the button is released:
+
+```text
+0 → 1    → nothing
+```
+
+And when it is pressed again:
+
+```text
+1 → 0    → toggle
+```
+
+This means one physical button press produces one LED toggle.
+
+### Understanding `last_button_state`
+
+The variable:
+
+```python
+last_button_state = 1
+```
+
+stores the state of the button during the previous loop iteration.
+
+The current state is then obtained using:
+
+```python
+current_button_state = button.value()
+```
+
+The program compares the two:
+
+```python
+if last_button_state == 1 and current_button_state == 0:
+```
+
+This specifically detects the transition from:
+
+```text
+HIGH → LOW
+ 1  →  0
+```
+
+which corresponds to pressing the button because the input uses a pull-up resistor.
+
+After checking the button, the previous state is updated:
+
+```python
+last_button_state = current_button_state
+```
+
+This allows the program to compare the current state with the state from the next loop iteration.
+
+### Using `led.value()` to Toggle the LED
+
+The improved code uses:
+
+```python
+led.value(not led.value())
+```
+
+`led.value()` reads the LED's current output state:
+
+```text
+0 → OFF
+1 → ON
+```
+
+The `not` operator reverses that state:
+
+```text
+not 0 → True → 1
+not 1 → False → 0
+```
+
+Therefore:
+
+```python
+led.value(not led.value())
+```
+
+means:
+
+> Read the current LED state and set it to the opposite state.
+
+This produces:
+
+```text
+OFF → ON
+ON  → OFF
+```
+
+### Why `time.sleep(0.02)` Is Used
+
+The improved version checks the button every 20 milliseconds:
+
+```python
+time.sleep(0.02)
+```
+
+This prevents the loop from running unnecessarily fast and also gives the program a reasonable sampling interval for the button.
+
+The delay is short enough that the button still feels instantaneous when pressed.
+
+### State vs. Event
+
+This experiment introduced an important distinction:
+
+**State:**
+
+> What is the button doing right now?
+
+```python
+button.value()
+```
+
+**Event:**
+
+> Did the button just change from released to pressed?
+
+```text
+previous = 1
+current  = 0
+```
+
+The original program reacted to the **state** of the button.
+
+The improved program detects a **press event** by comparing the previous and current states.
+
+This distinction will be important later when physical buttons are used to control actions on the e-reader, such as changing pages.
+
+### Result
+
+The improved program successfully allowed one button press to toggle the LED once, without continuous flickering while the button was held.
+
+This was my first introduction to storing a previous hardware state and detecting a change between two states.
