@@ -705,3 +705,86 @@ This distinction will be important later when physical buttons are used to contr
 The improved program successfully allowed one button press to toggle the LED once, without continuous flickering while the button was held.
 
 This was my first introduction to storing a previous hardware state and detecting a change between two states.
+
+## 5.7 Working with Multiple Buttons
+
+After learning how to detect a press from a single button, I added a second physical button to learn how multiple inputs can be handled independently.
+
+### Physical Connection
+
+The buttons were connected as:
+
+```text
+Button 1 → GP10 → GND
+Button 2 → GP6  → GND
+```
+
+Both GPIO inputs use the Pico's internal pull-up resistors.
+
+### Testing Two Buttons
+
+The goal was simple:
+
+- **Button 1 → turn the LED ON**
+- **Button 2 → turn the LED OFF**
+
+I wrote the following code:
+
+```python
+from machine import Pin
+import time
+
+button_1 = Pin(10, Pin.IN, Pin.PULL_UP)
+button_2 = Pin(6, Pin.IN, Pin.PULL_UP)
+led = Pin("LED", Pin.OUT)
+
+last_button1_state = 1
+last_button2_state = 1
+
+while True:
+    current_button1_state = button_1.value()
+    current_button2_state = button_2.value()
+
+    if last_button1_state == 1 and current_button1_state == 0:
+        led.value(1)
+        print("Button 1 pressed!")
+    last_button1_state = current_button1_state
+
+    if last_button2_state == 1 and current_button2_state == 0:
+        led.value(0)
+        print("Button 2 pressed!")
+    last_button2_state = current_button2_state
+
+    time.sleep(0.02)
+```
+
+### What I Learned
+
+The main concept I learned was that each button can be treated as an independent input. Each button has its own current state and previous state, allowing the program to detect a new press separately.
+
+I also understood more clearly that:
+
+```python
+button.value()
+```
+
+reads the **current electrical state** of the GPIO pin every time it is called. It is not a toggle command.
+
+With the pull-up resistor:
+
+```text
+Released → 1
+Pressed  → 0
+```
+
+The program compares the previous and current states to detect the transition:
+
+```text
+1 → 0 = new button press
+```
+
+### Result
+
+Both buttons worked successfully. Button 1 turned the LED on, while Button 2 turned it off.
+
+This experiment introduced me to handling multiple hardware inputs and applying the same state/event logic independently to each input.
