@@ -788,3 +788,90 @@ The program compares the previous and current states to detect the transition:
 Both buttons worked successfully. Button 1 turned the LED on, while Button 2 turned it off.
 
 This experiment introduced me to handling multiple hardware inputs and applying the same state/event logic independently to each input.
+
+## 5.8 Non-Blocking Timing with `ticks_ms()`
+
+I learned how to measure elapsed time on the Pico without using `time.sleep()`.
+
+The basic functions are:
+
+```python
+time.ticks_ms()
+```
+
+which gives the current time in milliseconds, and:
+
+```python
+time.ticks_diff(current_time, previous_time)
+```
+
+which calculates the time elapsed between two timestamps.
+
+I tested this using:
+
+```python
+from machine import Pin
+import time
+
+led = Pin("LED", Pin.OUT)
+
+previous_time = time.ticks_ms()
+
+while True:
+    led.value(0)
+
+    current_time = time.ticks_ms()
+
+    passed = time.ticks_diff(current_time, previous_time)
+
+    if passed >= 1000:
+        led.value(1)
+        print("1 second has passed!")
+        previous_time = current_time
+```
+
+### How It Works
+
+At the beginning, I store a timestamp:
+
+```python
+previous_time = time.ticks_ms()
+```
+
+Inside the `while True` loop, I continuously get the current timestamp:
+
+```python
+current_time = time.ticks_ms()
+```
+
+I then calculate how much time has passed:
+
+```python
+passed = time.ticks_diff(current_time, previous_time)
+```
+
+If at least 1000 milliseconds have passed:
+
+```python
+if passed >= 1000:
+```
+
+the LED is turned on and the message is printed. `previous_time` is then updated so that the next one-second interval can begin.
+
+### What I Learned
+
+Why:
+
+```python
+if passed >= 1000:
+```
+
+is preferable to:
+
+```python
+if passed == 1000:
+```
+
+The loop may not check the timer at exactly 1000 ms, so checking whether at least 1000 ms have passed is more reliable.
+Most importantly, I learned that this approach allows the program to **measure elapsed time without stopping the entire program with `time.sleep()`**.
+This will be useful later when the Pico needs to handle multiple things such as buttons, the display, storage, and Wi-Fi.
