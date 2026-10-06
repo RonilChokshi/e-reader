@@ -875,3 +875,189 @@ if passed == 1000:
 The loop may not check the timer at exactly 1000 ms, so checking whether at least 1000 ms have passed is more reliable.
 Most importantly, I learned that this approach allows the program to **measure elapsed time without stopping the entire program with `time.sleep()`**.
 This will be useful later when the Pico needs to handle multiple things such as buttons, the display, storage, and Wi-Fi.
+
+## 5.9 SPI Fundamentals
+
+Before connecting the e-paper display, I learned how the Pico communicates with external hardware using SPI (Serial Peripheral Interface).
+
+### What Is SPI?
+
+SPI is a communication protocol/interface used to exchange data between a controller, such as the Pico, and peripheral devices such as displays, SD cards, sensors, and other hardware.
+
+The RP2350 inside the Pico 2 W contains dedicated hardware for implementing SPI communication.
+
+SPI commonly uses four main signals:
+
+```text
+MOSI → Controller → Peripheral
+MISO ← Controller ← Peripheral
+SCK  → Clock signal
+CS   → Selects the peripheral
+```
+
+### SPI Signals
+
+**MOSI — Master Out, Slave In**
+
+Carries data from the Pico to the peripheral.
+
+**MISO — Master In, Slave Out**
+
+Carries data from the peripheral back to the Pico.
+
+**SCK — Serial Clock**
+
+The Pico generates the clock signal used to synchronize the data transfer between the Pico and the peripheral.
+
+**CS — Chip Select**
+
+Selects which peripheral the Pico is communicating with. Multiple peripherals can share MOSI, MISO, and SCK while using separate CS pins.
+
+For example:
+
+```text
+SPI0
+ ├── MOSI ─────┬── E-paper
+ ├── MISO ─────┤
+ └── SCK ──────┤
+               │
+       CS1 ─── E-paper
+       CS2 ─── SD card
+```
+
+Only the peripheral whose CS is active participates in the communication.
+
+### Sending Data with SPI
+
+SPI transfers data as individual bits. For example:
+
+```text
+10110010
+```
+
+The bits are transferred sequentially while the clock provides the timing reference.
+
+SPI is also full-duplex, meaning data can be sent from the Pico to a peripheral through MOSI while data is simultaneously sent back through MISO.
+
+### SPI Mode: CPOL and CPHA
+
+The Pico and peripheral must agree on how the clock and data are synchronized.
+
+**CPOL — Clock Polarity**
+
+Determines the clock's idle/default level:
+
+```text
+CPOL = 0 → clock idles LOW
+CPOL = 1 → clock idles HIGH
+```
+
+**CPHA — Clock Phase**
+
+Determines which clock edge is used to sample the data.
+
+The combination of CPOL and CPHA determines the SPI mode:
+
+```text
+Mode 0 → CPOL 0, CPHA 0
+Mode 1 → CPOL 0, CPHA 1
+Mode 2 → CPOL 1, CPHA 0
+Mode 3 → CPOL 1, CPHA 1
+```
+
+The correct mode depends on the peripheral being used.
+
+### SPI Hardware in the RP2350
+
+The RP2350 has two independent SPI controllers:
+
+```text
+RP2350
+├── SPI0
+└── SPI1
+```
+
+These are separate hardware SPI controllers capable of communicating independently.
+
+They are not different versions of SPI. They are two separate pieces of hardware capable of implementing the same SPI protocol.
+
+One SPI controller can also communicate with multiple peripherals by sharing MOSI, MISO, and SCK while giving each peripheral a separate CS pin.
+
+### SPI Configuration in MicroPython
+
+MicroPython allows the RP2350's SPI hardware to be configured using:
+
+```python
+from machine import SPI, Pin
+
+spi = SPI(
+    0,
+    baudrate=10_000_000,
+    polarity=0,
+    phase=0,
+    sck=Pin(...),
+    mosi=Pin(...),
+    miso=Pin(...)
+)
+```
+
+The first argument selects the SPI controller:
+
+```python
+SPI(0, ...)
+```
+
+selects SPI0, while:
+
+```python
+SPI(1, ...)
+```
+
+selects SPI1.
+
+Other parameters configure the SPI hardware:
+
+```text
+baudrate → SPI clock frequency
+polarity → CPOL
+phase    → CPHA
+sck      → GPIO used for SCK
+mosi     → GPIO used for MOSI
+miso     → GPIO used for MISO
+```
+
+The RP2350 already contains the physical SPI hardware. The MicroPython code configures that hardware for the specific peripheral being used.
+
+### Baud Rate
+
+The baud rate specifies the target SPI clock frequency.
+
+For example:
+
+```python
+baudrate=10_000_000
+```
+
+represents a target SPI clock of 10 MHz, or approximately 10 million clock cycles per second.
+
+The SPI hardware generates this clock using the RP2350's internal clocking and hardware dividers, so the achievable frequency depends on the hardware configuration.
+
+### Key Understanding
+
+The overall communication system can be viewed as three layers:
+
+```text
+Python code
+    ↓
+MicroPython
+    ↓
+RP2350 SPI hardware
+    ↓
+GPIO pins
+    ↓
+Physical SPI signals
+    ↓
+Peripheral device
+```
+
+This helped me understand that when I configure `SPI(...)` in MicroPython, I am not creating SPI in software from scratch. I am configuring dedicated SPI hardware that already exists inside the RP2350.
