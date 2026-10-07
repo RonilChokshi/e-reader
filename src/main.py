@@ -1,7 +1,30 @@
-from machine import Pin
+from machine import Pin, SPI
 import time
 
-button_1 = Pin(10, Pin.IN, Pin.PULL_UP)
+spi = SPI(
+    0,
+    baudrate=10_000_000,
+    polarity=0,
+    phase=0,
+    sck=Pin(2),
+    mosi=Pin(3),
+    miso=Pin(0)
+)
+
+cs = Pin(1, Pin.OUT)
+cs.value(1)
+
+print(spi)
+
+cs.value(0)
+
+spi.write(b'\xAA')
+
+cs.value(1)
+
+print("SPI transaction complete!")
+
+'''button_1 = Pin(10, Pin.IN, Pin.PULL_UP)  practicing time.ticks_ms()
 button_2 = Pin(6, Pin.IN, Pin.PULL_UP)
 led = Pin("LED",Pin.OUT)
 
@@ -16,7 +39,7 @@ while True:
     if passed >= 1000:
         led.value(1)
         print("1 second has passed!")
-        previous_time = current_time
+        previous_time = current_time'''
 
 '''while True:         #Testing 2 or 1 button toggle
 

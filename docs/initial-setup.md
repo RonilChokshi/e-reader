@@ -1061,3 +1061,858 @@ Peripheral device
 ```
 
 This helped me understand that when I configure `SPI(...)` in MicroPython, I am not creating SPI in software from scratch. I am configuring dedicated SPI hardware that already exists inside the RP2350.
+
+## 5.10 RP2350 SPI Controllers and GPIO Function Selection
+
+After configuring SPI in MicroPython, I wanted to understand how the SPI signals actually reach the physical GPIO pins on the Pico.
+
+### The RP2350 Has Two SPI Controllers
+
+The RP2350 contains two independent hardware SPI controllers:
+
+```text
+SPI0
+SPI1
+```
+
+These are separate hardware peripherals inside the microcontroller. They can independently handle SPI communication.
+
+This does **not** mean that the Pico can only communicate with two SPI devices. One SPI controller can communicate with multiple devices by sharing the SPI communication lines and using separate Chip Select (CS) signals for each device.
+
+### Internal SPI Signals vs Physical GPIO Pins
+
+The SPI controller exists inside the RP2350, while the GPIO pins are physical connections to the outside world.
+
+For example, SPI0 internally has signals such as:
+
+```text
+SPI0 RX
+SPI0 CSn
+SPI0 SCK
+SPI0 TX
+```
+
+These signals need to be connected to physical GPIO pins so that they can reach an external device.
+
+The RP2350 uses **GPIO function selection**, also called **multiplexing**, to make this connection.
+
+### What Is GPIO Function Selection?
+
+A GPIO pin is not permanently assigned to one purpose.
+
+A physical GPIO can be configured to act as:
+
+- a normal GPIO
+- an SPI signal
+- a UART signal
+- an I2C signal
+- or another supported peripheral function
+
+The RP2350 contains internal routing hardware that connects the selected peripheral signal to the physical GPIO.
+
+Conceptually:
+
+```text
+             RP2350
+        ┌────────────────┐
+        │                │
+        │     SPI0       │
+        │                │
+        │ SCK ───────────┼──┐
+        │ TX  ───────────┼──┤
+        │ RX  ───────────┼──┤
+        │                │  │
+        └────────────────┘  │
+                            ↓
+                  GPIO Function Selection
+                            ↓
+                    Physical GPIO pins
+```
+
+So when I configure:
+
+```python
+sck=Pin(2)
+```
+
+I am not manually creating an SPI clock on GP2.
+
+Instead, I am telling MicroPython to configure the RP2350 so that the SPI clock signal is routed to GP2.
+
+### Example SPI0 Mapping
+
+One valid SPI0 pin mapping is:
+
+```text
+GP0 → SPI0 RX  → MISO
+GP1 → SPI0 CSn → CS
+GP2 → SPI0 SCK → Clock
+GP3 → SPI0 TX  → MOSI
+```
+
+This is why the pins appear together in the Pico pinout. They represent a valid combination of physical GPIOs that can be connected to the SPI0 peripheral.
+
+There are also other valid GPIO mappings for SPI0 and SPI1.
+
+### A GPIO Is Not Permanently an "SPI Pin"
+
+This was an important concept for me.
+
+Earlier, I used GP10 as a button:
+
+```python
+button = Pin(10, Pin.IN, Pin.PULL_UP)
+```
+
+In that program, GP10 was being used as a normal GPIO input.
+
+The physical pin itself is not permanently a "button pin."
+
+The RP2350 can configure a GPIO for different supported functions depending on what the program requires.
+
+Therefore:
+
+```text
+Physical GPIO
+      ↓
+Can be connected to different internal functions
+      ↓
+GPIO / SPI / UART / I2C / etc.
+```
+
+The selected function determines what the pin does.
+
+### The Complete Picture
+
+I can now think of SPI communication as several layers:
+
+```text
+Python code
+     ↓
+MicroPython SPI API
+     ↓
+RP2350 SPI hardware
+     ↓
+GPIO function selection
+     ↓
+Physical GPIO pin
+     ↓
+External SPI device
+```
+
+For example:
+
+```python
+spi = SPI(
+    0,
+    sck=Pin(2),
+    mosi=Pin(3),
+    miso=Pin(0)
+)
+```
+
+means that MicroPython configures the RP2350's SPI0 peripheral and routes its SPI signals to the selected GPIOs.
+
+The SPI hardware then handles the actual communication, while the GPIO function-selection system connects those internal signals to the physical pins.
+
+This helped me understand that the Pico's pins are not the communication protocol itself. They are the **physical interface through which the RP2350's internal hardware peripherals communicate with external devices**.
+
+## 5.11 Configuring SPI in MicroPython
+
+After understanding how the RP2350 routes its internal SPI signals to GPIO pins, I configured the SPI hardware using MicroPython.
+
+### Creating an SPI Object
+
+I used the following code:
+
+```python
+from machine import SPI, Pin
+
+spi = SPI(
+    0,
+    baudrate=10_000_000,
+    polarity=0,
+    phase=0,
+    sck=Pin(2),
+    mosi=Pin(3),
+    miso=Pin(0)
+)
+
+print(spi)
+```
+
+The `SPI()` object represents the RP2350's hardware SPI peripheral that I want to use.
+
+### Understanding the Configuration
+
+```python
+SPI(0)
+```
+
+selects **SPI controller 0**.
+
+The requested SPI clock frequency was:
+
+```python
+baudrate=10_000_000
+```
+
+which requests a clock speed of 10 MHz.
+
+I noticed that the Pico reported:
+
+```text
+baudrate=8000000
+```
+
+instead of 10 MHz.
+
+This is because the SPI clock is generated from the RP2350's internal clock using hardware dividers, so not every arbitrary frequency can necessarily be generated exactly. MicroPython therefore configures the closest achievable frequency.
+
+The actual configured frequency in this experiment was **8 MHz**.
+
+### SPI Clock Configuration
+
+I used:
+
+```python
+polarity=0
+phase=0
+```
+
+These correspond to:
+
+```text
+CPOL = 0
+CPHA = 0
+```
+
+which is **SPI Mode 0**.
+
+`polarity` determines the clock's idle level, while `phase` determines which clock edge is used for sampling data.
+
+### GPIO Assignment
+
+I configured:
+
+```python
+sck=Pin(2)
+mosi=Pin(3)
+miso=Pin(0)
+```
+
+which resulted in:
+
+```text
+GP2 → SPI0 SCK  → Clock
+GP3 → SPI0 TX   → MOSI
+GP0 → SPI0 RX   → MISO
+```
+
+The RP2350's GPIO function-selection system connects these physical GPIOs to the corresponding SPI0 signals.
+
+### Checking the Configuration
+
+When I printed the SPI object:
+
+```python
+print(spi)
+```
+
+the Pico returned:
+
+```text
+SPI(0, baudrate=8000000, polarity=0, phase=0, bits=8, sck=2, mosi=3, miso=0)
+```
+
+This showed the actual configuration of the SPI peripheral.
+
+The output also showed:
+
+```text
+bits=8
+```
+
+meaning the SPI peripheral is configured to transfer data in **8-bit units**.
+
+### What I Learned
+
+This experiment helped connect the previous concepts together.
+
+When I write:
+
+```python
+spi = SPI(...)
+```
+
+I am not manually creating the SPI signals with Python.
+
+Instead, I am configuring the **dedicated SPI hardware inside the RP2350**.
+
+The RP2350 then handles the clock generation and bit shifting according to the configured SPI settings.
+
+The overall process is:
+
+```text
+Python code
+     ↓
+MicroPython SPI configuration
+     ↓
+RP2350 SPI0 hardware
+     ↓
+GPIO function selection
+     ↓
+GP2 / GP3 / GP0
+     ↓
+Physical SPI signals
+```
+
+At this point, the SPI peripheral was configured, but I had not yet transmitted any data.
+
+## 5.12 Sending Data Through SPI
+
+After configuring the SPI peripheral, I wanted to actually transmit data through it.
+
+I used:
+
+```python
+from machine import SPI, Pin
+
+spi = SPI(
+    0,
+    baudrate=10_000_000,
+    polarity=0,
+    phase=0,
+    sck=Pin(2),
+    mosi=Pin(3),
+    miso=Pin(0)
+)
+
+print(spi)
+
+spi.write(b'\xAA')
+
+print("Byte sent!")
+```
+
+### Sending a Byte
+
+The important line is:
+
+```python
+spi.write(b'\xAA')
+```
+
+This tells the SPI peripheral to transmit the byte `0xAA`.
+
+In binary:
+
+```text
+0xAA = 10101010
+```
+
+The SPI hardware takes these bits and sends them sequentially through the MOSI pin.
+
+Conceptually:
+
+```text
+MOSI → 1 0 1 0 1 0 1 0
+```
+
+At the same time, the SPI hardware generates the clock signal on SCK.
+
+The receiving device uses the clock to determine when to sample the MOSI signal.
+
+### What Happens Inside the Pico
+
+The process can be thought of as:
+
+```text
+spi.write(b'\xAA')
+        ↓
+     MicroPython
+        ↓
+    RP2350 SPI0
+        ↓
+  Convert byte into bits
+        ↓
+Generate clock + shift bits
+        ↓
+      MOSI (GP3)
+```
+
+The important thing I learned is that Python does **not** manually toggle GP3 eight times.
+
+The dedicated SPI hardware inside the RP2350 performs the bit shifting and clock generation.
+
+### From Byte to Electrical Signal
+
+The byte:
+
+```text
+10101010
+```
+
+is represented electrically on the MOSI line as a sequence of HIGH and LOW voltage levels.
+
+The clock on SCK provides the timing reference for these bits.
+
+Conceptually:
+
+```text
+MOSI:  1    0    1    0    1    0    1    0
+       ↑    ↑    ↑    ↑    ↑    ↑    ↑    ↑
+SCK:  _|‾|__|‾|__|‾|__|‾|__|‾|__|‾|__|‾|__|‾|_
+```
+
+The receiving SPI device can therefore reconstruct the original byte from the electrical signals.
+
+### Result
+
+The Pico successfully transmitted the byte and printed:
+
+```text
+Byte sent!
+```
+
+This was my first successful SPI transmission.
+
+It helped me understand the complete path from software data to physical electrical signals:
+
+```text
+Python byte
+    ↓
+MicroPython
+    ↓
+RP2350 SPI hardware
+    ↓
+Bits
+    ↓
+MOSI + SCK electrical signals
+    ↓
+External SPI device
+```
+
+This experiment also made the purpose of SPI much clearer to me. A GPIO pin represents a physical electrical signal, while SPI provides the communication protocol and dedicated hardware that allows digital data to be transferred efficiently between chips.
+
+## 5.13 Chip Select (CS)
+
+After successfully transmitting a byte through SPI, I learned about the **Chip Select (CS)** signal and why it is used with SPI devices.
+
+### Why Is CS Needed?
+
+SPI is designed as a shared communication bus. Multiple SPI devices can share the same:
+
+- MOSI
+- MISO
+- SCK
+
+However, the Pico needs a way to indicate which device it currently wants to communicate with.
+
+Each SPI device can therefore have its own **Chip Select (CS)** signal.
+
+Conceptually:
+
+```text
+                    ┌── E-paper
+                    │
+MOSI ───────────────┼── SD card
+SCK  ───────────────┼── Sensor
+MISO ───────────────┼── ...
+                    │
+
+CS1 ─────────────────── E-paper
+CS2 ─────────────────── SD card
+CS3 ─────────────────── Sensor
+```
+
+The communication lines are shared, while each device has its own CS signal.
+
+### Active-Low Chip Select
+
+SPI devices commonly use an active-low CS signal, often written as **CSn**.
+
+This means:
+
+```text
+CS = 1 → device not selected
+CS = 0 → device selected
+```
+
+Therefore, the Pico can select a device by pulling its CS pin LOW.
+
+### Adding CS to the SPI Experiment
+
+I added GP1 as the CS GPIO:
+
+```python
+from machine import SPI, Pin
+
+spi = SPI(
+    0,
+    baudrate=10_000_000,
+    polarity=0,
+    phase=0,
+    sck=Pin(2),
+    mosi=Pin(3),
+    miso=Pin(0)
+)
+
+cs = Pin(1, Pin.OUT)
+cs.value(1)
+
+print(spi)
+
+cs.value(0)
+
+spi.write(b'\xAA')
+
+cs.value(1)
+
+print("SPI transaction complete!")
+```
+
+The sequence is:
+
+```text
+CS HIGH
+   ↓
+CS LOW
+   ↓
+Transmit data
+   ↓
+CS HIGH
+```
+
+Conceptually:
+
+```text
+CS   ───────┐____________┌──────
+            │            │
+            │  selected  │
+            │            │
+SCK          └─┐_┌─┐_┌─┐_┌─┐_
+                 
+
+MOSI          1 0 1 0 1 0 1 0
+```
+
+When CS is LOW, the selected SPI device knows that the following clock and data signals are intended for it.
+
+### CS Is Still a GPIO
+
+An important thing I learned is that CS does not necessarily need to be controlled by the SPI peripheral itself.
+
+I can control it as a normal GPIO:
+
+```python
+cs = Pin(1, Pin.OUT)
+```
+
+and then manually select and deselect the device:
+
+```python
+cs.value(0)   # select device
+
+spi.write(data)
+
+cs.value(1)   # deselect device
+```
+
+This means that SPI communication involves multiple signals with different responsibilities:
+
+```text
+MOSI → carries data
+MISO → carries data back
+SCK  → provides timing
+CS   → selects the device
+```
+
+### Why This Is Different From a Button
+
+When I used a button, I only needed to read the voltage on one GPIO:
+
+```python
+button.value()
+```
+
+There was only one device connected to that input, so there was no need to select a device.
+
+SPI is different because it is a **communication bus** where multiple devices can share the same communication lines.
+
+CS provides the device-selection mechanism.
+
+### Important Distinction
+
+CS is not what makes SPI communication possible by itself.
+
+The SPI peripheral is responsible for implementing the SPI communication protocol, including clock generation and data shifting.
+
+CS simply tells a particular peripheral:
+
+> "You are the device I am communicating with right now."
+
+This experiment gave me the complete basic SPI transaction:
+
+```text
+Select device
+     ↓
+Transmit/receive data
+     ↓
+Deselect device
+```
+
+## 5.14 Why Use SPI Instead of Directly Controlling GPIOs?
+
+While learning SPI, I initially wondered why I needed an SPI peripheral at all.
+
+If a GPIO pin can output HIGH or LOW, it seemed like I could simply control several GPIO pins directly and communicate with an external device that way.
+
+This question helped me understand the difference between a **GPIO** and a **communication protocol/peripheral**.
+
+### GPIOs Are Physical Electrical Interfaces
+
+A GPIO pin allows the microcontroller to interact directly with an electrical signal.
+
+For example, with a button:
+
+```text
+GP10 ─── button ─── GND
+```
+
+I can simply read:
+
+```python
+button.value()
+```
+
+and determine whether the pin is HIGH or LOW.
+
+The button only requires a simple electrical state:
+
+```text
+HIGH → released
+LOW  → pressed
+```
+
+There is no complex communication protocol involved.
+
+### SPI Requires Coordinated Signals
+
+An SPI device is different.
+
+For example, to send the byte:
+
+```text
+10101010
+```
+
+the Pico needs to produce a specific sequence of data and clock signals.
+
+The receiving device needs to know:
+
+- which wire contains the data
+- which wire contains the clock
+- when to sample the data
+- what clock polarity and phase are being used
+- when a transaction starts and ends
+- which device is being communicated with
+
+The SPI protocol defines these rules.
+
+### SPI Could Be Created Using GPIOs
+
+It is technically possible to implement SPI manually using ordinary GPIOs.
+
+For example, I could configure:
+
+```python
+sck = Pin(2, Pin.OUT)
+mosi = Pin(3, Pin.OUT)
+cs = Pin(1, Pin.OUT)
+```
+
+and manually change their states:
+
+```python
+mosi.value(1)
+sck.value(1)
+sck.value(0)
+
+mosi.value(0)
+sck.value(1)
+sck.value(0)
+
+# and so on...
+```
+
+This technique is called **bit-banging**.
+
+I would essentially be manually creating the SPI waveform using GPIOs.
+
+However, this becomes inefficient and difficult when transmitting large amounts of data.
+
+### Using the Hardware SPI Peripheral
+
+Instead of manually controlling every bit, I can configure the RP2350's dedicated SPI hardware:
+
+```python
+spi = SPI(...)
+```
+
+and then simply write:
+
+```python
+spi.write(data)
+```
+
+The SPI hardware handles the low-level communication.
+
+It generates the clock, shifts the bits through MOSI, samples MISO when receiving data, and follows the configured SPI timing.
+
+Therefore:
+
+```text
+Without hardware SPI:
+
+Python
+  ↓
+Manually control GPIO
+  ↓
+Manually generate clock
+  ↓
+Manually send each bit
+
+
+With hardware SPI:
+
+Python
+  ↓
+spi.write(data)
+  ↓
+RP2350 SPI hardware
+  ↓
+Clock + data generated automatically
+```
+
+### The E-Paper Example
+
+This became much clearer when I thought about the actual e-paper display.
+
+The Waveshare display is a **400 × 300** pixel display.
+
+For a black-and-white image, there are:
+
+```text
+400 × 300 = 120,000 pixels
+```
+
+If each pixel is represented by one bit, that is:
+
+```text
+120,000 bits
+```
+
+or:
+
+```text
+15,000 bytes
+```
+
+of pixel data.
+
+Manually toggling GPIOs for every bit would be extremely inefficient.
+
+Instead, the program can provide the data to the SPI peripheral:
+
+```python
+spi.write(pixel_data)
+```
+
+and the RP2350's SPI hardware handles the actual bit-level transmission.
+
+### The Important Concept
+
+This helped me understand that:
+
+> **GPIOs are the physical electrical interface, while SPI is a communication protocol implemented by dedicated hardware that uses those physical connections.**
+
+The GPIO is the wire.
+
+SPI defines **how information is communicated over that wire**.
+
+The overall process is:
+
+```text
+Application data
+      ↓
+MicroPython
+      ↓
+SPI peripheral
+      ↓
+MOSI / SCK / MISO / CS
+      ↓
+Electrical signals
+      ↓
+External device's SPI interface
+      ↓
+Received bytes
+      ↓
+Device interprets those bytes
+```
+
+For example, when I send:
+
+```python
+spi.write(b'\xAA')
+```
+
+the byte:
+
+```text
+0xAA
+```
+
+becomes:
+
+```text
+10101010
+```
+
+The SPI hardware converts this into the appropriate electrical signal sequence on MOSI, synchronized by SCK.
+
+The receiving device's SPI interface reconstructs the bits into the original byte.
+
+### Two Layers of Communication
+
+I also learned that there are actually two different layers involved.
+
+**SPI layer:**
+
+```text
+How do we reliably transfer these bits?
+```
+
+**Device protocol layer:**
+
+```text
+What do these bytes actually mean?
+```
+
+SPI itself does not know what a particular byte means.
+
+For example, a byte received by an e-paper controller might represent a command, an address, or part of the display data depending on the display's own communication protocol.
+
+Therefore:
+
+```text
+SPI
+↓
+transfers the bits
+
+Device controller
+↓
+interprets what those bits mean
+```
+
+This was the point where I understood why SPI is necessary for communicating with devices such as the e-paper display, SD card, and other peripherals.
