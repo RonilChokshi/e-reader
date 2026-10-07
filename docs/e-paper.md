@@ -242,3 +242,132 @@ E-paper controller
 while DC, RST, and BUSY provide additional control and status information.
 
 Understanding these signals is important before wiring the display because each pin has a different role and direction.
+
+## 3. Connecting the Pico to the Display
+
+The Pico 2 W can be connected directly to the Waveshare e-paper board using the female headers on the display board.
+
+The direct connection uses the following GPIO mapping:
+
+VCC → VSYS  
+GND → GND
+
+DIN → GP11  
+CLK → GP10  
+CS → GP9  
+DC → GP8  
+RST → GP12  
+BUSY → GP13
+
+The SPI pins are:
+
+DIN → GP11 → MOSI  
+CLK → GP10 → SCK  
+CS → GP9 → Chip Select
+
+The additional control pins are:
+
+DC → GP8  
+RST → GP12  
+BUSY → GP13
+
+Since the Pico is inserted directly into the female headers on the Waveshare board, no jumper wires are required for these connections.
+
+## 4. Testing the BUSY Signal
+
+Before running the complete display driver, I tested the BUSY pin separately.
+
+```python
+from machine import Pin
+import time
+
+busy = Pin(13, Pin.IN, Pin.PULL_UP)
+
+while True:
+    print("BUSY =", busy.value())
+    time.sleep(1)
+```
+
+The display continuously returned:
+
+```text
+BUSY = 0
+```
+
+This showed that the BUSY signal was currently LOW.
+
+The Waveshare V2 driver uses the following interpretation:
+
+BUSY = 0 → display is idle  
+BUSY = 1 → display is busy
+
+Therefore, the Pico should wait while BUSY is HIGH and continue once BUSY becomes LOW.
+
+This was important because an earlier driver I tested used the opposite condition in its `ReadBusy()` function, which caused the program to wait incorrectly.
+
+## 5. Testing the Waveshare V2 Driver
+
+I then tested the Waveshare V2 driver located at:
+
+`python/Pico-ePaper-4.2_V2.py`
+
+The driver defines the same display resolution and GPIO pins:
+
+EPD_WIDTH = 400  
+EPD_HEIGHT = 300
+
+RST = GP12  
+DC = GP8  
+CS = GP9  
+BUSY = GP13
+
+The driver also uses SPI1 at a baudrate of 4 MHz.
+
+Inside the `EPD_4in2` class, the driver creates the GPIO objects, configures SPI, creates image buffers, and then performs the display initialization and clear sequence.
+
+The important point is that the driver handles the low-level communication with the e-paper controller for me.
+
+## 6. First Successful Display Communication
+
+The first attempt using the V2 driver initially still showed:
+
+```text
+e-Paper busy
+```
+
+The Pico was then removed from the Waveshare board and inserted back into the female headers.
+
+After reseating the Pico, the display successfully initialized and began working.
+
+This suggested that there may have been an unreliable physical connection between some of the Pico pins and the female headers.
+
+The successful result confirmed that:
+
+Pico → SPI/control signals → e-paper controller → display
+
+was working correctly.
+
+This was the first successful communication between my Pico 2 W and the e-paper display.
+
+## 7. Next Step: Understanding the Driver
+
+The display is now working using the Waveshare V2 driver located at:
+
+`python/Pico-ePaper-4.2_V2.py`
+
+The next goal is not simply to use the driver as a black box.
+
+I want to understand how the driver works internally, including:
+
+- How the `EPD_4in2` class is structured
+- How SPI communication is handled
+- How `CS` and `DC` are used
+- How the `RST` pin resets the controller
+- How `BUSY` is used to synchronize operations
+- What the initialization commands do
+- How the framebuffer stores the image
+- How image data is transferred to the display
+- How the display refresh sequence works
+- How the driver handles 1-bit and 4-grayscale images
+
+The long-term goal is to understand the driver well enough that I could eventually write my own simplified e-paper driver instead of treating the Waveshare driver as a black box.

@@ -1,7 +1,20 @@
-from machine import Pin, SPI
-import time
+from machine import SPI, Pin
 
-spi = SPI(
+spi = SPI(          #testing if the pins are are matched correctly to the suggested waveshare pin layout
+    1,
+    baudrate=4_000_000,
+    polarity=0,
+    phase=0,
+    sck=Pin(10),
+    mosi=Pin(11),
+    miso=None
+)
+
+print(spi)
+
+'''print("Pico + Waveshare connected!")'''
+
+'''spi = SPI(
     0,
     baudrate=10_000_000,
     polarity=0,
@@ -22,7 +35,7 @@ spi.write(b'\xAA')
 
 cs.value(1)
 
-print("SPI transaction complete!")
+print("SPI transaction complete!")'''
 
 '''button_1 = Pin(10, Pin.IN, Pin.PULL_UP)  practicing time.ticks_ms()
 button_2 = Pin(6, Pin.IN, Pin.PULL_UP)
